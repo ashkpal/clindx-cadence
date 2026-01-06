@@ -15,35 +15,6 @@ func NewCadenceStore(db *gorm.DB) *CadenceStore {
 	return &CadenceStore{DB: db}
 }
 
-func buildCadenceItemsFrom(
-	patientID uint,
-	testOrderID *uint,
-	method string,
-	cadenceDays int,
-	start time.Time,
-) []CadenceItem {
-
-	var items []CadenceItem
-
-	start = start.Truncate(24 * time.Hour)
-	next := start.AddDate(0, 0, cadenceDays)
-	end := start.AddDate(1, 0, 0)
-
-	for d := next; !d.After(end); d = d.AddDate(0, 0, cadenceDays) {
-		items = append(items, CadenceItem{
-			PatientID:             patientID,
-			TestOrderID:           testOrderID,
-			CadenceDate:           d,
-			ItemStatus:            "Future",
-			BloodCollectionMethod: method,
-			Active:                false,
-			Published:             false,
-		})
-	}
-
-	return items
-}
-
 func (c CadenceStore) DeleteNonFulfilledCadenceItems(
 	tx *gorm.DB,
 	patientID uint,
