@@ -19,6 +19,7 @@ type ScheduleRequest struct {
 type Service interface {
 	Schedule(db *gorm.DB, req ScheduleRequest) error
 	ActivateUpcoming() error
+	GetItemsByPatient(patientID uint) ([]db.CadenceItem, error)
 }
 
 func New(dbConn *gorm.DB) Service {
@@ -33,6 +34,15 @@ type service struct {
 
 func (s *service) ActivateUpcoming() error {
 	return s.store.ActivateUpcomingCadenceItems()
+}
+
+func (s *service) GetItemsByPatient(patientID uint) ([]db.CadenceItem, error) {
+	var items []db.CadenceItem
+	err := s.store.
+		Where("patient_id = ?", patientID).
+		Order("cadence_date ASC").
+		Find(&items).Error
+	return items, err
 }
 
 func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
