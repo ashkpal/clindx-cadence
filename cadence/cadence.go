@@ -11,6 +11,7 @@ import (
 type ScheduleRequest struct {
 	PatientID             uint
 	TestOrderID           *uint
+	PracticeID            uint
 	BloodCollectionMethod string
 	CadenceDays           int
 	StartDate             time.Time
@@ -20,6 +21,8 @@ type Service interface {
 	Schedule(db *gorm.DB, req ScheduleRequest) error
 	ActivateUpcoming() error
 	GetItemsByPatient(patientID uint) ([]db.CadenceItem, error)
+	GetItemsByPractice(patientID uint) ([]db.CadenceItem, error)
+	GetPendingItemsByPractice(patientID uint) ([]db.CadenceItem, error)
 }
 
 func New(dbConn *gorm.DB) Service {
@@ -45,13 +48,31 @@ func (s *service) GetItemsByPatient(patientID uint) ([]db.CadenceItem, error) {
 	return items, err
 }
 
+func (s *service) GetItemsByPractice(practiceID uint) ([]db.CadenceItem, error) {
+	var items []db.CadenceItem
+	err := s.store.
+		Where("practice_id = ?", practiceID).
+		Order("cadence_date ASC").
+		Find(&items).Error
+	return items, err
+}
+
+func (s *service) GetPendingItemsByPractice(practiceID uint) ([]db.CadenceItem, error) {
+	var items []db.CadenceItem
+	err := s.store.
+		Where("practice_id = ? and item_status = ?", practiceID, "Pending").
+		Order("cadence_date ASC").
+		Find(&items).Error
+	return items, err
+}
+
 func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
 
 	if err := s.store.DeleteNonFulfilledCadenceItems(db, req.PatientID); err != nil {
 		return err
 	}
 
-	items := buildCadenceItemsFrom(req.PatientID, req.TestOrderID, req.BloodCollectionMethod, req.CadenceDays, req.StartDate)
+	items := buildCadenceItemsFrom(req.PatientID, req.TestOrderID, req.PracticeID, req.BloodCollectionMethod, req.CadenceDays, req.StartDate)
 
 	if err := db.Create(&items).Error; err != nil {
 		db.Rollback()
@@ -64,6 +85,7 @@ func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
 func buildCadenceItemsFrom(
 	patientID uint,
 	testOrderID *uint,
+	practiceID uint,
 	method string,
 	cadenceDays int,
 	start time.Time,
@@ -79,6 +101,7 @@ func buildCadenceItemsFrom(
 		items = append(items, db.CadenceItem{
 			PatientID:             patientID,
 			TestOrderID:           testOrderID,
+			PracticeID:            practiceID,
 			CadenceDate:           d,
 			ItemStatus:            "Future",
 			BloodCollectionMethod: method,

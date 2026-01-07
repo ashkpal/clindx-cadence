@@ -11,6 +11,7 @@ type CadenceItem struct {
 
 	PatientID  uint   `gorm:"not null;index:idx_cadence_patient_status,priority:1"`
 	ItemStatus string `gorm:"size:50;not null;default:'Future';index:idx_cadence_patient_status,priority:2"`
+	PracticeID uint   `gorm:"not null;index:idx_cadence_practice"`
 
 	TestOrderID *uint `gorm:"index"`
 
