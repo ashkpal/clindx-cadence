@@ -23,7 +23,7 @@ type Service interface {
 	GetItemsByPatient(patientID uint) ([]db.CadenceItem, error)
 	GetItemsByPractice(patientID uint) ([]db.CadenceItem, error)
 	GetPendingItemsByPractice(patientID uint) ([]db.CadenceItem, error)
-	ToggleCollection(cadenceItemID uint, bloodCollectionMethod string) error
+	ToggleCollection(db *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error
 }
 
 func New(dbConn *gorm.DB) Service {
@@ -40,9 +40,9 @@ func (s *service) ActivateUpcoming() error {
 	return s.store.ActivateUpcomingCadenceItems()
 }
 
-func (s *service) ToggleCollection(cadenceItemID uint, bloodCollectionMethod string) error {
+func (s *service) ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error {
 
-	if err := s.store.Model(&db.CadenceItem{}).
+	if err := tx.Model(&db.CadenceItem{}).
 		Where("id = ?", cadenceItemID).
 		Update("blood_collection_method", bloodCollectionMethod).Error; err != nil {
 		return fmt.Errorf("update cadenceItem for mobile: %w", err)
