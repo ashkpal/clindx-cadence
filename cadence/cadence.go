@@ -23,8 +23,9 @@ type Service interface {
 	GetItemsByPatient(patientID uint) ([]db.CadenceItem, error)
 	GetItemsByPractice(patientID uint) ([]db.CadenceItem, error)
 	GetPendingItemsByPractice(patientID uint) ([]db.CadenceItem, error)
-	ToggleCollection(db *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error
-	UpdateCadenceItem(db *gorm.DB, cadenceItemID uint, itemStatus string) error
+	GetCadenceItemWithinNDays(db *gorm.DB, daysNum int) (*db.CadenceItem, error)
+	ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error
+	UpdateCadenceItem(tx *gorm.DB, cadenceItemID uint, itemStatus string) error
 }
 
 func New(dbConn *gorm.DB) Service {
@@ -49,6 +50,25 @@ func (s *service) ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollect
 		return fmt.Errorf("update cadenceItem for mobile: %w", err)
 	}
 	return nil
+}
+
+func GetCadenceItemWithinNDays(tx *gorm.DB, daysNum int) (*db.CadenceItem, error) {
+	var item db.CadenceItem
+
+	now := time.Now().Truncate(24 * time.Hour)
+	startDate := now.AddDate(0, 0, -daysNum)
+	endDate := now.AddDate(0, 0, daysNum)
+
+	err := tx.
+		Where("cadence_date BETWEEN ? AND ?", startDate, endDate).
+		Order("cadence_date ASC").
+		First(&item).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &item, nil
 }
 
 func (s *service) UpdateCadenceItem(tx *gorm.DB, cadenceItemID uint, itemStatus string) error {
