@@ -24,7 +24,7 @@ type Service interface {
 	GetItemsByPractice(patientID uint) ([]db.CadenceItem, error)
 	GetPendingItemsByPractice(patientID uint) ([]db.CadenceItem, error)
 	ToggleCollection(db *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error
-	UpdateCadenceItem(db *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error
+	UpdateCadenceItem(db *gorm.DB, cadenceItemID uint, itemStatus string) error
 }
 
 func New(dbConn *gorm.DB) Service {
