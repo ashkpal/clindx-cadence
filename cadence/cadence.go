@@ -1,6 +1,7 @@
 package cadence
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -65,6 +66,9 @@ func (s *service) GetCadenceItemWithinNDays(daysNum int) (*db.CadenceItem, error
 		First(&item).Error
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
