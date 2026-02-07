@@ -61,14 +61,49 @@ func (c CadenceStore) DeleteNonFulfilledCadenceItems(
 	return nil
 }
 
-func (c CadenceStore) ActivateUpcomingCadenceItems() error {
+func (c CadenceStore) ActivateUpcomingCadenceItems() ([]CadenceItem, error) {
 	today := time.Now().Truncate(24 * time.Hour)
 	activateUntil := today.AddDate(0, 0, 7)
 
-	return c.Model(&CadenceItem{}).
+	var items []CadenceItem
+
+	// 1️⃣ Find items to activate
+	if err := c.
 		Where("item_status = ?", "Future").
 		Where("cadence_date <= ?", activateUntil).
-		Updates(map[string]interface{}{
-			"item_status": "Pending",
-		}).Error
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	// 2️⃣ Update them
+	ids := make([]uint, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+
+	if err := c.
+		Model(&CadenceItem{}).
+		Where("id IN ?", ids).
+		Update("item_status", "Pending").Error; err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
+func (c CadenceStore) MarkPublished(items []CadenceItem) error {
+	ids := make([]uint, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+
+	return c.
+		Model(&CadenceItem{}).
+		Where("id IN ?", ids).
+		Update("published", true).
+		Error
 }

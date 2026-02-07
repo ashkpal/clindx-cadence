@@ -1,6 +1,7 @@
 package cadence
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -8,6 +9,13 @@ import (
 	"github.com/ashkpal/clindx-cadence/db"
 	"gorm.io/gorm"
 )
+
+type AlertPublisher interface {
+	CreateAlerts(
+		ctx context.Context,
+		alerts []db.CadenceItem,
+	) error
+}
 
 type ScheduleRequest struct {
 	PatientID             uint
@@ -35,12 +43,58 @@ func New(dbConn *gorm.DB) Service {
 	}
 }
 
+func NewWithAlertPublisher(
+	dbConn *gorm.DB,
+	alertPublisher AlertPublisher,
+) Service {
+	return &service{
+		store:          db.NewCadenceStore(dbConn),
+		alertPublisher: alertPublisher,
+	}
+}
+
 type service struct {
-	store *db.CadenceStore
+	store          *db.CadenceStore
+	alertPublisher AlertPublisher // optional
 }
 
 func (s *service) ActivateUpcoming() error {
-	return s.store.ActivateUpcomingCadenceItems()
+	items, err := s.store.ActivateUpcomingCadenceItems()
+	if err != nil {
+		return err
+	}
+
+	if len(items) == 0 || s.alertPublisher == nil {
+		return nil
+	}
+
+	// ✅ Filter only Mobile blood collection items
+	var mobileItems []db.CadenceItem
+	for _, item := range items {
+		if item.BloodCollectionMethod == "Mobile Phlebotomy" && !item.Published {
+			mobileItems = append(mobileItems, item)
+		}
+	}
+
+	if len(mobileItems) == 0 {
+		return nil
+	}
+
+	//alerts := buildCadenceItemViews(mobileItems)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := s.alertPublisher.CreateAlerts(ctx, mobileItems); err != nil {
+		return fmt.Errorf("salesforce publish failed: %w", err)
+	}
+
+	// ✅ Mark as published *after* successful SF call
+	if err := s.store.MarkPublished(mobileItems); err != nil {
+		return fmt.Errorf("failed to mark cadence items published: %w", err)
+	}
+
+	return nil
 }
 
 func (s *service) ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error {
