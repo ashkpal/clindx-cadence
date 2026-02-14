@@ -29,6 +29,7 @@ type ScheduleRequest struct {
 type Service interface {
 	Schedule(db *gorm.DB, req ScheduleRequest) error
 	ActivateUpcoming() error
+	DeleteNonFulfilledCadenceItems(tx *gorm.DB, patientID uint) error
 	GetItemsByPatient(patientID uint) ([]db.CadenceItem, error)
 	GetItemsByPractice(patientID uint) ([]db.CadenceItem, error)
 	GetPendingItemsByPractice(patientID uint) ([]db.CadenceItem, error)
@@ -56,6 +57,10 @@ func NewWithAlertPublisher(
 type service struct {
 	store          *db.CadenceStore
 	alertPublisher AlertPublisher // optional
+}
+
+func (s *service) DeleteNonFulfilledCadenceItems(tx *gorm.DB, patientID uint) error {
+	return s.store.DeleteNonFulfilledCadenceItems(tx, patientID)
 }
 
 func (s *service) ActivateUpcoming() error {
