@@ -19,7 +19,7 @@ type AlertPublisher interface {
 
 type ScheduleRequest struct {
 	PatientID             uint
-	TestOrderID           *uint
+	TRFID                 uint
 	PracticeID            uint
 	BloodCollectionMethod string
 	CadenceDays           int
@@ -177,7 +177,7 @@ func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
 		return err
 	}
 
-	items := buildCadenceItemsFrom(req.PatientID, req.TestOrderID, req.PracticeID, req.BloodCollectionMethod, req.CadenceDays, req.StartDate)
+	items := buildCadenceItemsFrom(req.PatientID, req.TRFID, req.PracticeID, req.BloodCollectionMethod, req.CadenceDays, req.StartDate)
 
 	if err := db.Create(&items).Error; err != nil {
 		db.Rollback()
@@ -189,7 +189,7 @@ func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
 
 func buildCadenceItemsFrom(
 	patientID uint,
-	testOrderID *uint,
+	trfID uint,
 	practiceID uint,
 	method string,
 	cadenceDays int,
@@ -205,7 +205,7 @@ func buildCadenceItemsFrom(
 	for d := next; !d.After(end); d = d.AddDate(0, 0, cadenceDays) {
 		items = append(items, db.CadenceItem{
 			PatientID:             patientID,
-			TestOrderID:           testOrderID,
+			TRFID:                 trfID,
 			PracticeID:            practiceID,
 			CadenceDate:           d,
 			ItemStatus:            "Future",
