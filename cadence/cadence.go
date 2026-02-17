@@ -37,7 +37,7 @@ type Service interface {
 	ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error
 	UpdateCadenceItem(tx *gorm.DB, cadenceItemID uint, itemStatus string) error
 	GetCadenceItemsWithinNDays(patientID uint, daysNum int) ([]db.CadenceItem, error)
-	GetAllCadenceItemsWithinNDays(daysNum int) ([]db.CadenceItem, error)
+	GetDueCadenceItems() ([]db.CadenceItem, error)
 }
 
 func New(dbConn *gorm.DB) Service {
@@ -114,15 +114,13 @@ func (s *service) ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollect
 	return nil
 }
 
-func (s *service) GetAllCadenceItemsWithinNDays(daysNum int) ([]db.CadenceItem, error) {
+func (s *service) GetDueCadenceItems() ([]db.CadenceItem, error) {
 	var items []db.CadenceItem
 
-	now := time.Now().Truncate(24 * time.Hour)
-	startDate := now.AddDate(0, 0, -daysNum)
-	endDate := now.AddDate(0, 0, daysNum)
+	now := time.Now()
 
 	err := s.store.
-		Where("item_status = ? and cadence_date BETWEEN ? AND ?", "Pending", startDate, endDate).
+		Where("item_status = ? and cadence_date <= ?", "Pending", now).
 		Order("cadence_date ASC").
 		Find(&items).Error
 
