@@ -32,12 +32,11 @@ type Service interface {
 	DeleteNonFulfilledCadenceItems(tx *gorm.DB, patientID uint) error
 	GetItemsByPatient(patientID uint) ([]db.CadenceItem, error)
 	GetItemsByPractice(practiceID uint) ([]db.CadenceItem, error)
-	GetDueItems() ([]db.CadenceItem, error)
 	GetPendingItemsByPractice(patientID uint) ([]db.CadenceItem, error)
 	ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollectionMethod string) error
 	UpdateCadenceItem(tx *gorm.DB, cadenceItemID uint, itemStatus string) error
 	GetCadenceItemsWithinNDays(patientID uint, daysNum int) ([]db.CadenceItem, error)
-	GetDueCadenceItems() ([]db.CadenceItem, error)
+	GetDueMobileCadenceItems() ([]db.CadenceItem, error)
 }
 
 func New(dbConn *gorm.DB) Service {
@@ -114,7 +113,7 @@ func (s *service) ToggleCollection(tx *gorm.DB, cadenceItemID uint, bloodCollect
 	return nil
 }
 
-func (s *service) GetDueCadenceItems() ([]db.CadenceItem, error) {
+func (s *service) GetDueMobileCadenceItems() ([]db.CadenceItem, error) {
 	var items []db.CadenceItem
 
 	now := time.Now()
@@ -171,15 +170,6 @@ func (s *service) GetItemsByPatient(patientID uint) ([]db.CadenceItem, error) {
 	var items []db.CadenceItem
 	err := s.store.
 		Where("patient_id = ?", patientID).
-		Order("cadence_date ASC").
-		Find(&items).Error
-	return items, err
-}
-
-func (s *service) GetDueItems() ([]db.CadenceItem, error) {
-	var items []db.CadenceItem
-	err := s.store.
-		Where("item_staus = ?", "Pending").
 		Order("cadence_date ASC").
 		Find(&items).Error
 	return items, err
