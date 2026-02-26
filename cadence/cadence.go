@@ -10,6 +10,29 @@ import (
 	"gorm.io/gorm"
 )
 
+type Config struct {
+	// How far into the future to generate cadence items
+	GenerationHorizon time.Duration // e.g. 365 * 24h
+
+	// How many days before activation we consider items "upcoming"
+	ActivateDaysUntil int
+
+	// Timeout for external alert publishing
+	AlertPublishTimeout time.Duration
+
+	// Collection method that should trigger alert publishing
+	MobileCollectionMethod string
+}
+
+func DefaultConfig() Config {
+	return Config{
+		GenerationHorizon:      365 * 24 * time.Hour, // 1 year
+		ActivateDaysUntil:      7,                    // activate within 7 days
+		AlertPublishTimeout:    30 * time.Second,
+		MobileCollectionMethod: "Mobile Phlebotomy",
+	}
+}
+
 type AlertPublisher interface {
 	CreateAlerts(
 		ctx context.Context,
@@ -39,24 +62,28 @@ type Service interface {
 	GetDueMobileCadenceItems() ([]db.CadenceItem, error)
 }
 
-func New(dbConn *gorm.DB) Service {
+func New(dbConn *gorm.DB, cfg Config) Service {
 	return &service{
-		store: db.NewCadenceStore(dbConn),
+		store:  db.NewCadenceStore(dbConn),
+		config: cfg,
 	}
 }
 
 func NewWithAlertPublisher(
 	dbConn *gorm.DB,
 	alertPublisher AlertPublisher,
+	cfg Config,
 ) Service {
 	return &service{
 		store:          db.NewCadenceStore(dbConn),
 		alertPublisher: alertPublisher,
+		config:         cfg,
 	}
 }
 
 type service struct {
 	store          *db.CadenceStore
+	config         Config
 	alertPublisher AlertPublisher // optional
 }
 
@@ -65,7 +92,7 @@ func (s *service) DeleteNonFulfilledCadenceItems(tx *gorm.DB, patientID uint) er
 }
 
 func (s *service) ActivateUpcoming() error {
-	items, err := s.store.ActivateUpcomingCadenceItems()
+	items, err := s.store.ActivateUpcomingCadenceItems(s.config.ActivateDaysUntil)
 	if err != nil {
 		return err
 	}
@@ -77,7 +104,7 @@ func (s *service) ActivateUpcoming() error {
 	// ✅ Filter only Mobile blood collection items
 	var mobileItems []db.CadenceItem
 	for _, item := range items {
-		if item.BloodCollectionMethod == "Mobile Phlebotomy" && !item.Published {
+		if item.BloodCollectionMethod == s.config.MobileCollectionMethod && !item.Published {
 			mobileItems = append(mobileItems, item)
 		}
 	}
@@ -88,7 +115,7 @@ func (s *service) ActivateUpcoming() error {
 
 	//alerts := buildCadenceItemViews(mobileItems)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.AlertPublishTimeout)
 	defer cancel()
 
 	if err := s.alertPublisher.CreateAlerts(ctx, mobileItems); err != nil {
@@ -119,7 +146,7 @@ func (s *service) GetDueMobileCadenceItems() ([]db.CadenceItem, error) {
 	now := time.Now()
 
 	err := s.store.
-		Where("item_status = ? and cadence_date <= ?", "Pending", now).
+		Where("item_status = ? and blood_collection_method = ? and cadence_date <= ?", "Pending", s.config.MobileCollectionMethod, now).
 		Order("cadence_date ASC").
 		Find(&items).Error
 
@@ -199,7 +226,7 @@ func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
 		return err
 	}
 
-	items := buildCadenceItemsFrom(req.PatientID, req.TRFID, req.PracticeID, req.BloodCollectionMethod, req.CadenceDays, req.StartDate)
+	items := s.buildCadenceItemsFrom(req.PatientID, req.TRFID, req.PracticeID, req.BloodCollectionMethod, req.CadenceDays, req.StartDate)
 
 	if err := db.Create(&items).Error; err != nil {
 		db.Rollback()
@@ -209,7 +236,7 @@ func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
 	return nil
 }
 
-func buildCadenceItemsFrom(
+func (s *service) buildCadenceItemsFrom(
 	patientID uint,
 	trfID uint,
 	practiceID uint,
@@ -222,7 +249,7 @@ func buildCadenceItemsFrom(
 
 	start = start.Truncate(24 * time.Hour)
 	next := start.AddDate(0, 0, cadenceDays)
-	end := start.AddDate(1, 0, 0)
+	end := start.Add(s.config.GenerationHorizon)
 
 	for d := next; !d.After(end); d = d.AddDate(0, 0, cadenceDays) {
 		items = append(items, db.CadenceItem{

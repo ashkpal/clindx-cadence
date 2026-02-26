@@ -61,9 +61,9 @@ func (c CadenceStore) DeleteNonFulfilledCadenceItems(
 	return nil
 }
 
-func (c CadenceStore) ActivateUpcomingCadenceItems() ([]CadenceItem, error) {
+func (c CadenceStore) ActivateUpcomingCadenceItems(daysUntil int) ([]CadenceItem, error) {
 	today := time.Now().Truncate(24 * time.Hour)
-	activateUntil := today.AddDate(0, 0, 7)
+	activateUntil := today.AddDate(0, 0, daysUntil)
 
 	var items []CadenceItem
 
