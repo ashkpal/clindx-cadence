@@ -71,8 +71,8 @@ func New(dbConn *gorm.DB, cfg Config) Service {
 
 func NewWithAlertPublisher(
 	dbConn *gorm.DB,
-	alertPublisher AlertPublisher,
 	cfg Config,
+	alertPublisher AlertPublisher,
 ) Service {
 	return &service{
 		store:          db.NewCadenceStore(dbConn),
