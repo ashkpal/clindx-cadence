@@ -60,6 +60,7 @@ type Service interface {
 	UpdateCadenceItem(tx *gorm.DB, cadenceItemID uint, itemStatus string) error
 	GetCadenceItemsWithinNDays(patientID uint, daysNum int) ([]db.CadenceItem, error)
 	GetDueMobileCadenceItems() ([]db.CadenceItem, error)
+	GetNextOrderDate(patientID uint) (*time.Time, error)
 }
 
 func New(dbConn *gorm.DB, cfg Config) Service {
@@ -85,6 +86,50 @@ type service struct {
 	store          *db.CadenceStore
 	config         Config
 	alertPublisher AlertPublisher // optional
+}
+
+func (s *service) GetNextOrderDate(patientID uint) (*time.Time, error) {
+
+	cadenceItems, err := s.GetItemsByPatient(patientID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(cadenceItems) == 0 {
+		return nil, nil
+	}
+
+	today := time.Now().Truncate(24 * time.Hour)
+
+	var nextOrderDate time.Time
+	found := false
+
+	for i := range cadenceItems {
+		item := &cadenceItems[i]
+
+		if item.ItemStatus != "Future" &&
+			item.ItemStatus != "Pending" {
+			continue
+		}
+
+		date := item.CadenceDate.Truncate(24 * time.Hour)
+
+		// Skip past dates
+		if date.Before(today) {
+			continue
+		}
+
+		if !found || date.Before(nextOrderDate) {
+			nextOrderDate = date
+			found = true
+		}
+	}
+
+	if !found {
+		return nil, nil
+	}
+
+	return &nextOrderDate, nil
 }
 
 func (s *service) DeleteNonFulfilledCadenceItems(tx *gorm.DB, patientID uint) error {
