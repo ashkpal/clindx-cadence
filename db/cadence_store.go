@@ -62,37 +62,47 @@ func (c CadenceStore) DeleteNonFulfilledCadenceItems(
 }
 
 func (c CadenceStore) ActivateUpcomingCadenceItems(daysUntil int) ([]CadenceItem, error) {
-	today := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	activateUntil := today.AddDate(0, 0, daysUntil)
 
 	var items []CadenceItem
 
-	// 1️⃣ Find items to activate
-	if err := c.
-		Where("item_status = ?", "Future").
-		Where("cadence_date <= ?", activateUntil).
-		Find(&items).Error; err != nil {
+	returnItems := []CadenceItem{}
+
+	err := c.Transaction(func(tx *gorm.DB) error {
+		if err := tx.
+			Where("item_status = ?", "Future").
+			Where("cadence_date <= ?", activateUntil).
+			Find(&items).Error; err != nil {
+			return err
+		}
+
+		if len(items) == 0 {
+			return nil
+		}
+
+		ids := make([]uint, len(items))
+		for i, item := range items {
+			ids[i] = item.ID
+		}
+
+		if err := tx.
+			Model(&CadenceItem{}).
+			Where("id IN ?", ids).
+			Update("item_status", "Pending").Error; err != nil {
+			return err
+		}
+
+		returnItems = items
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
 
-	if len(items) == 0 {
-		return nil, nil
-	}
-
-	// 2️⃣ Update them
-	ids := make([]uint, 0, len(items))
-	for _, item := range items {
-		ids = append(ids, item.ID)
-	}
-
-	if err := c.
-		Model(&CadenceItem{}).
-		Where("id IN ?", ids).
-		Update("item_status", "Pending").Error; err != nil {
-		return nil, err
-	}
-
-	return items, nil
+	return returnItems, nil
 }
 
 func (c CadenceStore) MarkPublished(items []CadenceItem) error {
