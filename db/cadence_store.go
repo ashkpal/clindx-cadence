@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -77,6 +78,8 @@ func (c CadenceStore) ActivateUpcomingCadenceItems(daysUntil int) ([]CadenceItem
 			Find(&items).Error; err != nil {
 			return err
 		}
+
+		log.Printf("# of Items found to be activated:%d", len(items))
 
 		if len(items) == 0 {
 			return nil

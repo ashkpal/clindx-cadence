@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ashkpal/clindx-cadence/db"
@@ -137,6 +138,7 @@ func (s *service) DeleteNonFulfilledCadenceItems(tx *gorm.DB, patientID uint) er
 }
 
 func (s *service) ActivateUpcoming() error {
+	log.Printf("Activate from service for %d days in future !!", s.config.ActivateDaysUntil)
 	items, err := s.store.ActivateUpcomingCadenceItems(s.config.ActivateDaysUntil)
 	if err != nil {
 		return err
