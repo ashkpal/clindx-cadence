@@ -61,6 +61,7 @@ type Service interface {
 	UpdateCadenceItem(tx *gorm.DB, cadenceItemID uint, itemStatus string) error
 	GetCadenceItemsWithinNDays(patientID uint, daysNum int) ([]db.CadenceItem, error)
 	GetDueMobileCadenceItems() ([]db.CadenceItem, error)
+	GetDueCadenceItems() ([]db.CadenceItem, error)
 	GetNextOrderDate(patientID uint) (*time.Time, error)
 }
 
@@ -194,6 +195,26 @@ func (s *service) GetDueMobileCadenceItems() ([]db.CadenceItem, error) {
 
 	err := s.store.
 		Where("item_status = ? and blood_collection_method = ? and cadence_date <= ?", "Pending", s.config.MobileCollectionMethod, now).
+		Order("cadence_date ASC").
+		Find(&items).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return items, nil
+}
+
+func (s *service) GetDueCadenceItems() ([]db.CadenceItem, error) {
+	var items []db.CadenceItem
+
+	now := time.Now()
+
+	err := s.store.
+		Where("item_status = ? and cadence_date <= ?", "Pending", s.config.MobileCollectionMethod, now).
 		Order("cadence_date ASC").
 		Find(&items).Error
 
