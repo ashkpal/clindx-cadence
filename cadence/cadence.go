@@ -214,7 +214,7 @@ func (s *service) GetDueCadenceItems() ([]db.CadenceItem, error) {
 	now := time.Now()
 
 	err := s.store.
-		Where("item_status = ? and cadence_date <= ?", "Pending", s.config.MobileCollectionMethod, now).
+		Where("item_status = ? and cadence_date <= ?", "Pending", now).
 		Order("cadence_date ASC").
 		Find(&items).Error
 
