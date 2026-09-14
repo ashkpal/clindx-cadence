@@ -48,6 +48,7 @@ type ScheduleRequest struct {
 	BloodCollectionMethod string
 	CadenceDays           int
 	StartDate             time.Time
+	EndDate               time.Time
 }
 
 type Service interface {
@@ -290,11 +291,22 @@ func (s *service) GetPendingItemsByPractice(practiceID uint) ([]db.CadenceItem, 
 
 func (s *service) Schedule(db *gorm.DB, req ScheduleRequest) error {
 
+	start := req.StartDate
+	end := req.EndDate
+	if req.EndDate.IsZero() {
+		start = start.Truncate(24 * time.Hour)
+		end = start.Add(s.config.GenerationHorizon)
+	}
+
+	if !req.EndDate.IsZero() && req.StartDate.After(req.EndDate) {
+		return nil
+	}
+
 	if err := s.store.DeleteNonFulfilledCadenceItems(db, req.PatientID); err != nil {
 		return err
 	}
 
-	items := s.buildCadenceItemsFrom(req.PatientID, req.TRFID, req.PracticeID, req.BloodCollectionMethod, req.CadenceDays, req.StartDate)
+	items := s.buildCadenceItemsFrom(req.PatientID, req.TRFID, req.PracticeID, req.BloodCollectionMethod, req.CadenceDays, start, end)
 
 	if err := db.Create(&items).Error; err != nil {
 		db.Rollback()
@@ -311,13 +323,14 @@ func (s *service) buildCadenceItemsFrom(
 	method string,
 	cadenceDays int,
 	start time.Time,
+	end time.Time,
 ) []db.CadenceItem {
 
 	var items []db.CadenceItem
 
 	start = start.Truncate(24 * time.Hour)
 	next := start.AddDate(0, 0, cadenceDays)
-	end := start.Add(s.config.GenerationHorizon)
+	//end := start.Add(s.config.GenerationHorizon)
 
 	for d := next; !d.After(end); d = d.AddDate(0, 0, cadenceDays) {
 		items = append(items, db.CadenceItem{
