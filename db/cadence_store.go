@@ -8,6 +8,11 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	subsequentOrderType = "Subsequent"
+	placedOrderStatus   = "Placed"
+)
+
 type CadenceStore struct {
 	*gorm.DB
 }
@@ -72,9 +77,31 @@ func (c CadenceStore) ActivateUpcomingCadenceItems(daysUntil int) ([]CadenceItem
 	returnItems := []CadenceItem{}
 
 	err := c.Transaction(func(tx *gorm.DB) error {
+		activeCadenceOrder := tx.
+			Table("test_orders").
+			Select("1").
+			Where("test_orders.patient_id = cadence_items.patient_id").
+			Where("test_orders.cadence_item_id IS NOT NULL").
+			Where("test_orders.test_type = ?", subsequentOrderType).
+			Where("test_orders.order_status = ?", placedOrderStatus).
+			Where("test_orders.deleted_at IS NULL")
+
+		skipped := tx.
+			Model(&CadenceItem{}).
+			Where("item_status = ?", "Future").
+			Where("cadence_date <= ?", today).
+			Where("EXISTS (?)", activeCadenceOrder).
+			Update("item_status", "Skipped")
+		if skipped.Error != nil {
+			return skipped.Error
+		}
+
+		log.Printf("# of due Items skipped because of an existing active cadence order:%d", skipped.RowsAffected)
+
 		if err := tx.
 			Where("item_status = ?", "Future").
 			Where("cadence_date <= ?", activateUntil).
+			Where("NOT EXISTS (?)", activeCadenceOrder).
 			Find(&items).Error; err != nil {
 			return err
 		}
