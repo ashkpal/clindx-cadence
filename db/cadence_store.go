@@ -81,7 +81,7 @@ func (c CadenceStore) ActivateUpcomingCadenceItems(daysUntil int) ([]CadenceItem
 			Table("test_orders").
 			Select("1").
 			Where("test_orders.patient_id = cadence_items.patient_id").
-			Where("test_orders.cadence_item_id IS NOT NULL").
+			//Where("test_orders.cadence_item_id IS NOT NULL").
 			Where("test_orders.test_type = ?", subsequentOrderType).
 			Where("test_orders.order_status = ?", placedOrderStatus).
 			Where("test_orders.deleted_at IS NULL")
