@@ -26,7 +26,7 @@ func (c CadenceStore) DeleteNonFulfilledCadenceItems(
 	patientID uint,
 ) error {
 
-	fulfilledStatuses := []string{"Fulfilled"}
+	fulfilledStatuses := []string{"Fulfilled", "Skipped", "Orphaned"}
 
 	// Select items that needs to be deleted
 	var itemsToDelete []CadenceItem
