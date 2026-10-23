@@ -195,6 +195,7 @@ func (s *service) GetDueMobileCadenceItems() ([]db.CadenceItem, error) {
 	now := time.Now()
 
 	err := s.store.
+		Scopes(db.WithoutOpenOrders).
 		Where("item_status = ? and blood_collection_method = ? and cadence_date <= ?", "Pending", s.config.MobileCollectionMethod, now).
 		Order("cadence_date ASC").
 		Find(&items).Error
@@ -215,6 +216,7 @@ func (s *service) GetDueCadenceItems() ([]db.CadenceItem, error) {
 	now := time.Now()
 
 	err := s.store.
+		Scopes(db.WithoutOpenOrders).
 		Where("item_status = ? and cadence_date <= ?", "Pending", now).
 		Order("cadence_date ASC").
 		Find(&items).Error

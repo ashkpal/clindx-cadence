@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	subsequentOrderType = "Subsequent"
-	placedOrderStatus   = "Placed"
+	nextPersonalDxName   = "NeXT Personal Dx"
+	completeOrderStatus  = "Complete"
+	cancelledOrderStatus = "Cancelled"
 )
 
 type CadenceStore struct {
@@ -67,6 +68,23 @@ func (c CadenceStore) DeleteNonFulfilledCadenceItems(
 	return nil
 }
 
+// openPatientOrders correlates orders with the outer cadence_items query.
+// Baseline and subsequent orders both block cadence until complete or cancelled.
+func openPatientOrders(tx *gorm.DB) *gorm.DB {
+	return tx.Session(&gorm.Session{NewDB: true}).
+		Table("test_orders").Select("1").
+		Where("test_orders.patient_id = cadence_items.patient_id").
+		Where("test_orders.test_name = ?", nextPersonalDxName).
+		Where("test_orders.order_status NOT IN ?", []string{completeOrderStatus, cancelledOrderStatus}).
+		Where("test_orders.deleted_at IS NULL")
+}
+
+// WithoutOpenOrders is a GORM scope for cadence item queries. The order creator
+// must still recheck eligibility in its transaction to handle concurrent changes.
+func WithoutOpenOrders(tx *gorm.DB) *gorm.DB {
+	return tx.Where("NOT EXISTS (?)", openPatientOrders(tx))
+}
+
 func (c CadenceStore) ActivateUpcomingCadenceItems(daysUntil int) ([]CadenceItem, error) {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -77,14 +95,7 @@ func (c CadenceStore) ActivateUpcomingCadenceItems(daysUntil int) ([]CadenceItem
 	returnItems := []CadenceItem{}
 
 	err := c.Transaction(func(tx *gorm.DB) error {
-		activeCadenceOrder := tx.
-			Table("test_orders").
-			Select("1").
-			Where("test_orders.patient_id = cadence_items.patient_id").
-			//Where("test_orders.cadence_item_id IS NOT NULL").
-			Where("test_orders.test_type = ?", subsequentOrderType).
-			Where("test_orders.order_status = ?", placedOrderStatus).
-			Where("test_orders.deleted_at IS NULL")
+		activeCadenceOrder := openPatientOrders(tx)
 
 		skipped := tx.
 			Model(&CadenceItem{}).
